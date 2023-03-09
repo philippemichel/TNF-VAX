@@ -2,11 +2,15 @@
 title: "TNF-VAX"
 subtitle: "Plan d'analyse statistique"
 author: 
-    name : "Philippe MICHEL"
-    affiliations:
-      name: "Hôpital NOVO"
-      department: "USRC"
-lang: fr-FR
+    - name: "Dr Philippe MICHEL"
+      affiliations:
+        name: "Hôpital NOVO"
+        department: "Unité de Soutien à la Recherche Clinique"
+    - name:  "Dr Christine TRUMTEL"
+      affiliations:
+        name: "Hôpital NOVO"
+        department: "site de Pontoise -- Médecine interne"
+lang: fr
 date: today
 date-format: "DD/MM/YYYY"
 format: 
@@ -14,20 +18,22 @@ format:
     titlepage: bg-image
     titlepage-bg-image: "novo_usrc.png"
     logo-space-after: "0\\baselineskip"
-    titlepage-footer: "Dr Christine Trumtel\\newline Médecine interne\\newline Hôpital NOVO site de Pontoise"
     documentclass: scrartcl
     classoption: ["oneside", "open=any"]
     number-sections: true
+    titlepage-footer: "Étude monocentrique rétrospective"
 titlepage-theme:
-    title-fontstyle: ["huge", "bfseries"]
-    subtitle-fontstyle: ["Large"]
+    title-fontstyle: ["Huge", "bfseries"]
+    title-color: #345d61
+    subtitle-color: #345d61
+    subtitle-fontstyle: ["huge"]
     logo-size: "0.2\\textheight"
 jss-pdf:
     keep-tex: true   
 pdf-engine: lualatex
 keep-tex: true
 number-sections: true
-toc: false
+toc: true
 lof: false
 lot: false
 mainfont: Faune
@@ -44,6 +50,9 @@ papersize: a4paper
 editor: source
 bibliography: stat.bib
 cite-method: biblatex
+csl: jama.csl
+#reference-location: margin
+#citation-location: margin
 license: "CC BY-SA"
 ---
 ---
@@ -66,6 +75,10 @@ library("kableExtra")
 
 ## Généralités
 
+Étude monocentrique rétrospective.
+
+*Évaluation de la prescription d’une vaccination anti-pneumococcique (Vaccin pneumococcique  conjugué 13-valent (VPC 13) et Vaccin pneumococcique non conjugué 23-valent (VPP 23)) par les médecins exerçant à l'hôpital NOVO chez les patients bénéficiant d’un traitement anti-TNF alpha.*
+
 Le risque $\alpha$ retenu sera de 0,05 & la puissance de 0,8.
 
 Sauf indication contraires pour les tests simples les variables numériques seront comparées par un test de Student si possible ( effectifs suffisants, distribution normales (Test de Shapiro-Wilk), égalité des variances) auquel cas un test non paramétrique de Wilcoxon sera utilisé. Un test du $\chi^2$ sera utilisé pour les variables discrètes sous réserve d'un effectif suffisant. À défaut un test de Fischer sera utilisé. Des graphiques seront réalisés pour les résultats importants (package `ggplot2` [@ggplot]).
@@ -73,16 +86,23 @@ Sauf indication contraires pour les tests simples les variables numériques sero
 ## Taille de l'échantillon
  
 
-Le critère principal est 
+```{r}
+#| label: taille
 
--
+ex <- 0.1
+px <- 0.5
+np <- 10000
+nn <- nb.obs.ph(px = px,ex = ex, np = np)
+nn <- floor(nn*1.1)+1
+```
 
+Il s'agit d'une étude purement obsersationnelle sans test sur le critère principal. Le  taux de patient correctement vacciné dans la population étudiée (patients traités par TNF-alpha) n'étant pas connu on se base sur le taux le plus défavorable soit `r px*100`%. En utilisant un calcul de taille d'échantillon souhaitable pour un sondage, avec pourcentage une marge d'erreur de `r ex * 100` % on obtient un nombre minimal d'environ **`r nn` cas** exploitables. 
 
 ## Données manquantes
 
-Le décompte des données manquantes sera réalisé & présenté par un tableau ou un graphique. . Les variables comportant trop de données manquantes ou non utilisables ne seront pas prises en compte après validation par le promoteur.
+Le décompte des données manquantes sera réalisé & présenté par un tableau ou un graphique. Les cas où la donnée "Vaccination effectuée" sera maquante seront exclus de l'étude. Les variables comportant trop de données manquantes ou non utilisables ne seront pas prises en compte après validation par le promoteur.
 
-Après ce premier tri une imputation des données manquantes (package `missMDA` [@miss]) sera réalisée uniquement pour l'analyse factorielle & pour la recherche du meilleur modèle par step-by-tep descendant pour les analyses par régression (logistique ou linéaire). Néanmoins pour cette analyse, après choix du modèle, le calcul final sera fait avec les données réelles. 
+Après ce premier tri une imputation des données manquantes par ACP itérative régularisée (package `missMDA` [@miss]) sera réalisée uniquement pour l'analyse factorielle & pour la recherche du meilleur modèle par step-by-step descendant pour les analyses par régression (logistique ou linéaire). Néanmoins pour cette analyse, après choix du modèle, le calcul final sera fait avec les données réelles. 
 
 ## Description de la population
 
@@ -90,9 +110,9 @@ Après ce premier tri une imputation des données manquantes (package `missMDA` 
 
 La description de la population concerne :
 
-Un tableau présentera les valeurs démographiques & clinique pour l'ensemble de la population puis pour chaque groupe. Les valeurs numériques seront présentées en moyenne ± écart-type, les valeurs discrètes en % avec son intervalle de confiance à 95 %. Une différence entre les groupes sera recherchée, item par item afin de valider au mieux l'équivalence entre les groupes.
+Un tableau présentera les valeurs démographiques & clinique pour l'ensemble de la population. Les valeurs numériques seront présentées en moyenne ± écart-type, les valeurs discrètes en % avec son intervalle de confiance à 95 %. 
 
-Une recherche de corrélation (package `corr` [@corr]) entre les variables en particulier celles de la partie I sera réalisée. Si certaines variables se montreront trop corrélées elles devront être exclues de l'étude après accord du promoteur. 
+Une recherche de corrélation (package `corr` [@corr]) entre les variables sera réalisée. Si certaines variables se montreront trop corrélées elles devront être exclues de l'étude après accord du promoteur. 
 
 ### Analyse factorielle
 
@@ -102,16 +122,28 @@ Cette analyse ne pourra être qu'après transformation des variables numériques
 
 ## Objectif principal
 
-
+*Existence ou non d’une prescription ou réalisation d’une vaccination anti-pneumococcique complète (VPC13 et VPP23) tracée dans le dossier médical informatisé, chez les patients sous anti-TNF alpha.*
  
-Une analyse simple sera réalisée pour rechercher d'éventuels facteurs pronostics.
+Une analyse simple sera réalisée pour rechercher d'éventuels facteurs pronostics sur toutes les données démographiques & médicales recueillies. Cette étude portera en particulier sur les comorbidités, la pathologie pour laquelle le traitement a été introduit & les caractéristiques du prescripteur.
 
 
 ### Analyse par régression
 
-Un modèle de régression logistique multinomiale sera employé (package `VGAM` [@vgam]). Ce modèle de régression permettra d’explorer les facteurs associés à la réponse en utilisant les critères ayant une la réponse significative avec un seuil p.value = 0,2 lors de l'étape précédente. Une recherche du meilleur modèle sera réalisée par un step-by-step descendant évaluée par le critère d’information d’Akaike. Cette étape sera réalisée après imputation des données manquantes mais le résultat final sera calculé sur les données vraies. 
+Un modèle de régression logistique sera employé. Ce modèle de régression permettra d’explorer les facteurs associés à la réponse en utilisant les critères ayant une la réponse significative avec un seuil p.value = 0,2 lors de l'étape précédente. Une recherche du meilleur modèle sera réalisée par un step-by-step descendant évaluée par le critère d’information d’Akaike. Cette étape sera réalisée après imputation des données manquantes mais le résultat final sera calculé sur les données vraies. 
 
 ## Objectifs secondaires
+
+### Objectif 1
+
+*Parmi les patients vaccinés, on différenciera ceux ayant reçu une vaccination complète avant mise sous traitement et ceux l’ayant eu après.*
+
+Le nombre & le pourcentage (avec son intervalle de confiance à 95 %) seront indiqué pour les deux modalités (avant & après). Comme il s'agit d'une sous-population probablement peu nombreuse aucun autre test ne pourra être effectué.
+
+### Objectif 2
+
+*Proportion de patients ayant eu une vaccination incomplète (une dose unique de VPC 13 ou VPP 23).*
+
+Le nombre & le pourcentage (avec son intervalle de confiance à 95 %) sera indiqué. Comme il s'agit d'une sous population probablement peu nombreuse aucun autre test ne pourra être effectué.
 
 ## Technique {.appendix}
 
@@ -119,4 +151,4 @@ L'analyse statistique sera réalisée avec le logiciel **R**[@rstat] & divers pa
 
 Un dépôt GitHub sera utilisé qui ne comprendra que le code & non les données ou résultats. Au besoin un faux tableau de données sera présenté pour permettre des tests.
 
-<https://github.com/philippemichel/>
+<https://github.com/philippemichel/TNF-VAX>

@@ -1,57 +1,410 @@
 ---
-title: ""
-subtitle: "Rapport"
-thanks: ""
-author: "Philippe MICHEL"
-format: pdf
+title: "TNF-VAX"
+subtitle: "Rapport statistique -- V0.1"
+author: 
+    - name: "Dr Philippe MICHEL"
+      affiliations:
+        name: "Hôpital NOVO"
+        department: "Unité de Soutien à la Recherche Clinique"
+format: 
+  titlepage-pdf:
+    titlepage: bg-image
+    titlepage-bg-image: "novo_usrc.png"
+    logo-space-after: "0\\baselineskip"
+    documentclass: scrreprt
+    classoption: ["oneside", "open=any"] 
+    number-sections: true
+    titlepage-footer: "**Dr Christine  TRUMTEL ** \\newline  Service Unité d’Aval des Urgences – Unité de Pathologies Infectieuses et Tropicales  -- Hôpital NOVO (Site Pontoise)\\newline \\newline  Vaccination anti-pneumococcique chez les patients sous anti-TNF-$\\alpha$ : état des lieux sur le Centre Hospitalier NOVO\\newline Étude monocentrique rétrospective"
+titlepage-theme:
+    title-fontstyle: ["Huge", "bfseries"]
+    title-color: novo
+    subtitle-color: novo
+    subtitle-fontstyle: ["huge"]
+    logo-size: "0.2\\textheight"
+    vrule-width: "0.1cm"
+    vrule-color: novo
+include-in-header:
+      text: |
+        \definecolor{novo}{HTML}{27484b}
+jss-pdf:
+    keep-tex: true   
 pdf-engine: lualatex
-documentclass: scrartcl
-mainfont: GillSans
-mainfontoptions:
-- Ligatures = Common
-- Ligatures = Rare
-sansfont: Source Sans Pro
-monofont: Source Sans Pro
-colorlinks: true
-fontsize: 11pt
-papersize: a4
-lang: fr
-fig-align: center
+keep-tex: true
+number-sections: true
 toc: true
 lof: true
-lot: false
-cite-method: biblatex
+lot: true
+mainfont: Faune
+mainfontoptions:
+  - Numbers=OldStyle
+  - Ligatures=TeX
+sansfont: Myriad Pro
+sansfontoptions:
+  - Ligatures=TeX
+fig-cap-location: bottom
+tbl-cap-location: top
+classoption: [french]
+papersize: a4paper
+editor: source
 bibliography: stat.bib
-license: MIT
-always_allow_html: true
+cite-method: biblatex
+csl: jama.csl
+#reference-location: margin
+#citation-location: margin
+license: "CC BY-SA"
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE, cache = FALSE) 
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE, cache = TRUE) 
+expx <- FALSE
+classeur <- "tnfvax1.xls"
 ```
 
 ```{r}
 #| label: lib
+
 library(baseph)
 library(janitor)
+library(corrplot)
+library(missMDA)
 library(tidyverse)
 library(lubridate)
+library(labelled)
 library(kableExtra)
 library(forestmodel)
+library(epiDisplay)
+library(confintr)
+library(colorspace)
+library(DataExplorer)
+library(gtsummary)
+library(survminer)
 ```
 
+## Généralités
+
+```{r}
+#| label: import
+
+bnom <- read_csv("datas/bnom.csv")
+bnom <- bnom$nom
+#
+tt <- read_csv2("datas/TNF-VAXprov.csv") |> 
+      mutate_if(is.character, as.factor) |>
+    janitor::clean_names() 
+#
+  names(tt) <- stringr::str_replace_all(names(tt), "_", ".")
+  var_label(tt) <- as.character(bnom)
+#
+tt <- tt |> 
+  mutate(ddn = dmy(ddn)) |> 
+  mutate(intro.tnf = dmy(intro.tnf)) |>
+  mutate(age = as.numeric((intro.tnf-ddn)/365.25)) |> 
+  mutate(nb.inj.tot = as.factor(nb.inj.tot)) |> 
+  mutate(nb.inj.med  = as.factor(nb.inj.med)) |> 
+  mutate(date.2e.inj = dmy(date.2e.inj))
+#
+var_label(tt$age) <- "Âge"
+var_label(tt$nb.inj.tot) <- "Nombre d’injections total"
+var_label(tt$nb.inj.med) <- "Nombre d’injections réalisées/prescrites par le prescripteur du traitement"
+```
+
+### Données manquantes
+
+```{r}
+#| label: missing
+#| fig-cap: Données manquantes
+#| fig-asp: 1.4
+
+plot_missing(tt, title = "Données manquantes")
+```
 
 ## Description de la population
 
 
-L'échantillon comporte `r ` cas.
+Le fichier compte `r nrow(tt)` cas pour `r ncol(tt)` variables.
+
+
+```{r}
+#| label: pyr
+#| fig-cap: "Pyramide des âges"
+epiDisplay::pyramid(
+    age = tt$age,
+    sex = tt$sex,
+    binwidth = 10,
+    col.gender = c("pink", "skyblue1"),
+    main = "Pyramide des âges",
+    printTable = FALSE
+)
+```
+
+```{r}
+#| label: desc1
+#| tbl-cap: Descriptif
+
+tt |> 
+    select(3:7,10:24) |> 
+    tbl_summary(missing = "no") |> 
+    modify_header(label ~ " ") |>
+    bold_labels() |> 
+    add_n() |> 
+   exptabph(lg = FALSE, exp = expx, nomfich = classeur, nomsheet = "descdemog")
+    
+```
+
+```{r}
+#| label: desc2
+#| tbl-cap: Descriptif - Indication de l'anti-TNF-$\alpha$
+
+tt |> 
+    select(25:36) |> 
+    tbl_summary(missing = "no") |> 
+    modify_header(label ~ " ") |>
+    bold_labels() |> 
+    add_n() |> 
+   exptabph(lg = FALSE, exp = expx, nomfich = classeur, nomsheet = "descdemog")
+    
+```
+
+## Critère principal
 
 
 
+```{r}
+#| label: critp1
+#| tbl-cap: Critère principal
 
+tt |> 
+    select(vaccin.compl) |> 
+    tbl_summary(missing = "no") |> 
+    modify_header(label ~ " ") |>
+    bold_labels() |> 
+    add_n() |> 
+    add_ci() |> 
+    exptabph(lg = FALSE, exp = expx, nomfich = classeur, nomsheet = "critp1")
+```
+
+```{r}
+#| label: critpfig1
+#| fig-cap: Vaccination complète
+
+barsimpleph(tt,vaccin.compl,titre = "Vaccination complète", capt = "Vaccination complète")
+```
+
+
+### Facteurs influants
+
+#### Analyse simple
+
+```{r}
+#| label: factmono1
+#| tbl-cap: Facteurs démographiques
+tt |>
+  select(3:5, 10:24) |>
+  tbl_summary(by =  vaccin.compl, missing = "no") |>
+  modify_header(label ~ " ") |>
+  modify_spanning_header(c("stat_1", "stat_2") ~ "**Vaccination complète**") %>%
+  bold_labels() |>
+  add_n() |>
+  add_p() |>
+  exptabph(
+    lg = FALSE,
+    exp = expx,
+    nomfich = classeur,
+    nomsheet = "critpmono1"
+  )
+```
+
+```{r}
+#| label: factmono2
+#| tbl-cap: Indication
+tt |>
+  select(c(5, 25:36)) |>
+  tbl_summary(by =  vaccin.compl, missing = "no") |>
+  modify_header(label ~ " ") |>
+  modify_spanning_header(c("stat_1", "stat_2") ~ "**Vaccination complète**") %>%
+  bold_labels() |>
+  add_n() |>
+  add_p() |>
+  exptabph(
+    lg = FALSE,
+    exp = expx,
+    nomfich = classeur,
+    nomsheet = "critpmono2"
+  )
+```
+
+#### Analyse multivariée
+
+```{r}
+#| label: critpmulti1
+#| tbl-cap: Vaccination complète -- Analyse en régression
+
+glm(vaccin.compl~sex + age + vih, family = "binomial", data = tt) |> 
+  tbl_regression(exponentiate = TRUE) |> 
+  modify_header(label ~ " ") |>
+  bold_labels() |>
+    exptabph(
+    lg = FALSE,
+    exp = expx,
+    nomfich = classeur,
+    nomsheet = "critpmulti"
+  )
+
+```
+
+## Critères secondaires
+
+### Vaccination incomplète
+
+```{r}
+#| label: vaccinc
+#| tbl-cap: Vaccination incomplète
+
+tt |> 
+    select(nb.inj.tot) |> 
+    tbl_summary(missing = "no") |> 
+    modify_header(label ~ " ") |>
+    bold_labels() |> 
+    add_n() |> 
+    add_ci() |> 
+    exptabph(lg = FALSE, exp = expx, nomfich = classeur, nomsheet = "incomp1")
+```
+
+```{r}
+#| label: figincomp
+#| fig-cap: Vaccination incomplète
+
+barsimpleph(tt,nb.inj.tot,titre = "Vaccination incomplète", stitre = "Nombre d'injections", capt = "Vaccination incomplète")
+```
+
+### Date d'injection
+
+On étudie si la vaccination était complète (Deux injections) avant la première dose d'anti-TNF-$\alpha$.
+
+```{r}
+#| label: avant
+#| tbl-cap: Vaccination avant l'anti-TNF-$\alpha$
+
+tt <- tt |>
+  mutate(avantn = as.numeric(intro.tnf - date.2e.inj)) |>
+  mutate(avant = ifelse(avantn > 0, "Vaccination avant", "Vaccination après"))
+#
+tt |> 
+  select(avant) |>
+  tbl_summary(missing = "no") |>
+  modify_header(label ~ " ") |>
+  bold_labels() |>
+  add_n() |>
+  add_ci() |>
+  exptabph(
+    lg = FALSE,
+    exp = expx,
+    nomfich = classeur,
+    nomsheet = "avant"
+  )
+```
+
+```{r}
+#| label: figavant
+#| fig-cap: Vaccination avant l'anti-TNF-$\alpha$
+
+barsimpleph(tt,avant,titre = "Vaccination avant l'anti-TNF-alpha", capt = "Vaccination avant l'anti-TNF-alpha")
+```
+
+#### Selon la spécialité du prescripteur
+
+La spécialité est déduite de l'indication
+
+```{r}
+#| label: calculspé
+
+ttn <- tt |>
+  select(25:36) |> 
+  mutate_all(as.numeric)
+ttn <- ttn |> 
+  mutate(Rhumatologie = ifelse(rowSums(ttn[1:4]) > 4, "oui","non")) |> 
+  mutate(Dermatologie = ifelse(rowSums(ttn[6:8]) > 3, "oui","non")) |> 
+  mutate('Gastro.entérologie' = ifelse(rowSums(ttn[9:11]) > 3, "oui","non")) |> 
+  mutate(Autre = ifelse(rowSums(ttn[c(5,12)]) > 2, "oui","non")) |> 
+  select(13:16)  |> 
+  mutate_all(as.factor)
+ttn$vac <- tt$vaccin.compl
+#
+ttl <- pivot_longer(ttn, 1:4) |> 
+  dplyr::filter(value == "oui") 
+## Réordonnancement de ttl$name
+ttl$name <- ttl$name %>%
+  fct_relevel(
+    "Dermatologie", "Gastro.entérologie", "Rhumatologie", "Autre"
+  )
+```
+
+```{r}
+#| label: tbspe
+#| tbl-cap: Vaccination selon la spécialité
+
+ttl |> 
+  tbl_cross(vac, name, percent = "column") |> 
+    modify_header(label ~ " ") |>
+  bold_labels() |>
+  add_p() |> 
+  modify_spanning_header(paste0("stat_",1:4) ~ "**Spécialité du prescripteur**") |> 
+  exptabph(
+    lg = FALSE,
+    exp = expx,
+    nomfich = classeur,
+    nomsheet = "avant"
+  )
+```
+
+```{r}
+#| label: figspe
+#| fig-cap: Vaccination selon la spécialité du prescripteur
+
+zz <- fisher.test(ttl$vac,ttl$name)
+pp <- beaup(zz$p.value, affp = 1)
+
+ttl |> 
+  dplyr::filter(name != "Autre") |> 
+  ggplot() +
+  aes(x = name, fill = vac) +
+  geom_bar(position="fill") +    labs(
+      title = "Vaccination complète & spécialité du prescripteur",
+      subtitle = pp,
+      x = "Spécialité",
+      y = "%",
+      fill = "Vaccination"
+    ) +
+    theme_light() +
+    scale_fill_discrete_qualitative(palette = "Dynamic") +
+    theme(
+      plot.title = element_text(size = 14, face = "bold"),
+      plot.subtitle = element_text(size = 12),
+      axis.title.y = element_text(
+        size = 12,
+        angle = 0,
+        vjust = .5
+      ),
+      axis.title.x = element_text(
+        size = 12
+      ),
+      axis.text.x = element_text(
+        size = 12
+      ),
+      axis.text.y = element_text(size = 12),
+      legend.position = "right"
+    ) +
+  scale_y_continuous(labels = seq(0,100,25))
+```
 
 ## Technique
-Les données démographiques on été décrites par la médiane & les quartiles pour les données numériques, en pourcentage pour les données catégorielles. Les intervalles de confiance ont été calculés par bootstrap.
-Pour le critère principal la comparaison des deux groupes a été réalisée par un test de Wilcoxon sur séries appariées. La recherche de facteurs prédictifs a été réalisée par des test ANOVA. Vu le grand nombre de tests la limite de significabilité a été définie à 0,01.
 
-L'analyse statistique a été réalisée grâce au logiciel **R**[@rstat] & à divers packages en particulier `tidyverse`[@tidy], `FactoMineR`[@facto] & `epiDisplay`[@epid].
+Sauf indication contraire les données discrètes ont été présentés en pourcentage puis comparées par un test exact de Fisher. Les données numériques ont été présentées par leur médiane & les quartiles puis comparées par le test non paramétrique de Wilcoxon. 
+
+Aucune imputation de données n'a été nécessaire.
+
+L'analyse multivarié a été menée en régression logistique. Les conditions d'utilisation d'une loi binomiale (distribution normale des résidus) n'étant pas remplies une loi quasi-binomiale a été utilisée. 
+Dans un premier temps on incorpore dans cette analyse multivariée tous les facteurs ayant une p-value < 20 %. Ensuite on recherche le meilleur modèle par un step-by-step descendant. 
+
+L'analyse statistique a été réalisée avec le logiciel **R** [@rstat] & diverses librairies en particulier celles du `tidyverse` [@tidy], `epiDisplay` [@epid] & `baseph` [@baseph].
+

@@ -14,7 +14,7 @@ format:
     documentclass: scrreprt
     classoption: ["oneside", "open=any"] 
     number-sections: true
-    titlepage-footer: "**Dr Christine  TRUMTEL ** \\newline  Service Unité d’Aval des Urgences – Unité de Pathologies Infectieuses et Tropicales  -- Hôpital NOVO (Site Pontoise)\\newline \\newline  Vaccination anti-pneumococcique chez les patients sous anti-TNF-$\\alpha$ : état des lieux sur le Centre Hospitalier NOVO\\newline Étude monocentrique rétrospective"
+    titlepage-footer: "**Dr Christine  TRUMTEL ** \\newline  Service Unité d’Aval des Urgences – Unité de Pathologies Infectieuses et Tropicales  -- Hôpital NOVO (Site Pontoise)\\newline \\newline  Vaccination anti-pneumococcique chez les patients sous anti-TNF-$\\alpha$ : état des lieux sur le Centre Hospitalier NOVO\\newline Étude monocentrique rétrospective\\newline \\newline \\today"
 titlepage-theme:
     title-fontstyle: ["Huge", "bfseries"]
     title-color: novo
@@ -26,6 +26,7 @@ titlepage-theme:
 include-in-header:
       text: |
         \definecolor{novo}{HTML}{27484b}
+        \usepackage{babel}
 jss-pdf:
     keep-tex: true   
 pdf-engine: lualatex
@@ -66,7 +67,8 @@ classeur <- "tnfvax1.xls"
 library(baseph)
 library(janitor)
 library(corrplot)
-library(missMDA)
+library(FactoMineR)
+library(factoextra)
 library(tidyverse)
 library(lubridate)
 library(labelled)
@@ -107,6 +109,8 @@ var_label(tt$age) <- "Âge"
 var_label(tt$nb.inj.tot) <- "Nombre d’injections total"
 var_label(tt$nb.inj.med) <- "Nombre d’injections réalisées/prescrites par le prescripteur du traitement"
 ```
+
+La recherche de corrélations gênantes n'a rien retrouvé. On garde donc toutes les variables. 
 
 ### Données manquantes
 
@@ -164,6 +168,48 @@ tt |>
    exptabph(lg = FALSE, exp = expx, nomfich = classeur, nomsheet = "descdemog")
     
 ```
+### Analyse factorielle
+
+Une analyse factorielle en analyse de composante principale est tentée après discrétisation de l'âge. Les variables de nombre d'injections ont été supprimées car trop liées à la variable" `vaccination complète`.
+
+```{r}
+#| label: MCA
+
+ttz <- tt |> 
+  select(- c(ddn, pat.id,date.2e.inj, intro.tnf, nb.inj.tot,nb.inj.med)) |> 
+  janitor::remove_constant() |>
+  janitor::remove_empty() |> 
+  mutate_if(is.character, as.factor)
+  
+ttz$age <- cut(ttz$age,
+  include.lowest = TRUE,
+  right = FALSE,
+  dig.lab = 2,
+  breaks = c(20, 40, 60, 100),
+  labels =c("<40 ans", "40 à 60 ans", "> 60 ans")
+)
+
+rtt <- MCA(ttz, graph = FALSE)
+```
+
+```{r}
+#| label: MCAvar
+#| fig-cap: MCA - repésentation des variables
+
+fviz_mca_var(rtt, repel = TRUE, title = "MCA  - Graphique des variables", col.var = "cos2", select.var = list( contrib = 20))
+```
+
+Sueles les variables les plus influentes ont été gardée. La couleur représente la participation de la variable au graphique. Les variabes qui permettent le mieux de catégorisé les cas sont `"Aucune comorbidité"` & `"traitement immunosuppresseur, biothérapie (autre que anti TNF alpha), et/ou corticothérapie"`. le statut `"VIH"` semble aussi être important.
+
+```{r}
+#| label: MCAindvac
+#| fig-cap: MCA - rerpésentation des individus seon l'état vaccinal
+
+fviz_mca_ind(rtt, habillage = "vaccin.compl", addEllipses = TRUE, repel = TRUE)
+```
+
+La vaccination complète ne semble pas diffrentier clairement deux gropues de patients. 
+
 
 ## Critère principal
 
@@ -399,12 +445,12 @@ ttl |>
 
 ## Technique
 
-Sauf indication contraire les données discrètes ont été présentés en pourcentage puis comparées par un test exact de Fisher. Les données numériques ont été présentées par leur médiane & les quartiles puis comparées par le test non paramétrique de Wilcoxon. 
+Sauf indication contraire les données discrètes ont été présentés en pourcentage puis comparées par un test exact de Fisher. Les données numériques ont été présentées par leur médiane & quartiles puis comparées par le test non paramétrique de Wilcoxon. 
 
 Aucune imputation de données n'a été nécessaire.
 
 L'analyse multivarié a été menée en régression logistique. Les conditions d'utilisation d'une loi binomiale (distribution normale des résidus) n'étant pas remplies une loi quasi-binomiale a été utilisée. 
-Dans un premier temps on incorpore dans cette analyse multivariée tous les facteurs ayant une p-value < 20 %. Ensuite on recherche le meilleur modèle par un step-by-step descendant. 
+Dans un premier temps on incorpore dans cette analyse multivariée tous les facteurs ayant une p-value < 20 % en aanlyse monovariée. Ensuite on recherche le meilleur modèle par un step-by-step descendant basé sur l'AIC. 
 
-L'analyse statistique a été réalisée avec le logiciel **R** [@rstat] & diverses librairies en particulier celles du `tidyverse` [@tidy], `epiDisplay` [@epid] & `baseph` [@baseph].
+L'analyse statistique a été réalisée avec le logiciel **R** [@rstat] & diverses librairies en particulier le `tidyverse` [@tidy]  & `baseph` [@baseph].
 

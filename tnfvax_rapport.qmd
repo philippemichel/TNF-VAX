@@ -1,6 +1,6 @@
 ---
 title: "TNF-VAX"
-subtitle: "Rapport statistique -- V0.1"
+subtitle: "Rapport statistique -- V1.1"
 author: 
     - name: "Dr Philippe MICHEL"
       affiliations:
@@ -56,7 +56,7 @@ license: "CC BY-SA"
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE, cache = TRUE) 
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE, cache = FALSE) 
 expx <- FALSE
 classeur <- "tnfvax1.xls"
 ```
@@ -76,8 +76,8 @@ library(kableExtra)
 library(forestmodel)
 library(epiDisplay)
 library(confintr)
+library(visdat)
 library(colorspace)
-library(DataExplorer)
 library(gtsummary)
 library(survminer)
 ```
@@ -90,7 +90,7 @@ library(survminer)
 bnom <- read_csv("datas/bnom.csv")
 bnom <- bnom$nom
 #
-tt <- read_csv2("datas/TNF-VAXprov.csv") |> 
+tt <- read_csv("datas/TNF-VAX.csv") |> 
       mutate_if(is.character, as.factor) |>
     janitor::clean_names() 
 #
@@ -98,7 +98,7 @@ tt <- read_csv2("datas/TNF-VAXprov.csv") |>
   var_label(tt) <- as.character(bnom)
 #
 tt <- tt |> 
-  mutate(ddn = dmy(ddn)) |> 
+  mutate(ddn = my(ddn)) |> 
   mutate(intro.tnf = dmy(intro.tnf)) |>
   mutate(age = as.numeric((intro.tnf-ddn)/365.25)) |> 
   mutate(nb.inj.tot = as.factor(nb.inj.tot)) |> 
@@ -117,10 +117,12 @@ La recherche de corrélations gênantes n'a rien retrouvé. On garde donc toutes
 ```{r}
 #| label: missing
 #| fig-cap: Données manquantes
-#| fig-asp: 1.4
+#| fig-asp: 1
 
-plot_missing(tt, title = "Données manquantes")
+vis_miss(tt, show_perc_col = TRUE)
 ```
+IL n'y a pas de données manquantes. Auune imputation ne sera donc nécessaire.
+
 
 ## Description de la population
 
@@ -151,13 +153,13 @@ tt |>
     modify_header(label ~ " ") |>
     bold_labels() |> 
     add_n() |> 
-   exptabph(lg = FALSE, exp = expx, nomfich = classeur, nomsheet = "descdemog")
+   gexptabph(lg = FALSE, exp = expx, nomfich = classeur, nomsheet = "descdemog")
     
 ```
 
 ```{r}
 #| label: desc2
-#| tbl-cap: Descriptif - Indication de l'anti-TNF-$\alpha$
+#| tbl-cap: Descriptif - Indication de l'anti-TNF-alpha
 
 tt |> 
     select(25:36) |> 
@@ -165,18 +167,16 @@ tt |>
     modify_header(label ~ " ") |>
     bold_labels() |> 
     add_n() |> 
-   exptabph(lg = FALSE, exp = expx, nomfich = classeur, nomsheet = "descdemog")
+   pexptabph(lg = FALSE, exp = expx, nomfich = classeur, nomsheet = "descindic")
     
 ```
-### Analyse factorielle
 
-Une analyse factorielle en analyse de composante principale est tentée après discrétisation de l'âge. Les variables de nombre d'injections ont été supprimées car trop liées à la variable" `vaccination complète`.
 
-```{r}
+```{r eval = FALSE}
 #| label: MCA
 
 ttz <- tt |> 
-  select(- c(ddn, pat.id,date.2e.inj, intro.tnf, nb.inj.tot,nb.inj.med)) |> 
+  select(- c(ddn, id,date.2e.inj, intro.tnf, nb.inj.tot,nb.inj.med)) |> 
   janitor::remove_constant() |>
   janitor::remove_empty() |> 
   mutate_if(is.character, as.factor)
@@ -192,23 +192,22 @@ ttz$age <- cut(ttz$age,
 rtt <- MCA(ttz, graph = FALSE)
 ```
 
-```{r}
+```{r eval = FALSE}
 #| label: MCAvar
 #| fig-cap: MCA - repésentation des variables
 
 fviz_mca_var(rtt, repel = TRUE, title = "MCA  - Graphique des variables", col.var = "cos2", select.var = list( contrib = 20))
 ```
 
-Sueles les variables les plus influentes ont été gardée. La couleur représente la participation de la variable au graphique. Les variabes qui permettent le mieux de catégorisé les cas sont `"Aucune comorbidité"` & `"traitement immunosuppresseur, biothérapie (autre que anti TNF alpha), et/ou corticothérapie"`. le statut `"VIH"` semble aussi être important.
 
-```{r}
+
+```{r eval = FALSE}
 #| label: MCAindvac
 #| fig-cap: MCA - rerpésentation des individus seon l'état vaccinal
 
-fviz_mca_ind(rtt, habillage = "vaccin.compl", addEllipses = TRUE, repel = TRUE)
+fviz_mca_ind(rtt, habillage = "vaccin.compl", addEllipses = TRUE, repel = TRUE, geom = "point")
 ```
 
-La vaccination complète ne semble pas diffrentier clairement deux gropues de patients. 
 
 
 ## Critère principal
@@ -226,14 +225,59 @@ tt |>
     bold_labels() |> 
     add_n() |> 
     add_ci() |> 
-    exptabph(lg = FALSE, exp = expx, nomfich = classeur, nomsheet = "critp1")
+    pexptabph(lg = FALSE, exp = expx, nomfich = classeur, nomsheet = "critp1")
 ```
+
+Un tiers des patients ont eu une vaccination complète.
+
 
 ```{r}
 #| label: critpfig1
 #| fig-cap: Vaccination complète
 
-barsimpleph(tt,vaccin.compl,titre = "Vaccination complète", capt = "Vaccination complète")
+ppt <- table(tt$vaccin.compl)
+ppl <- transangph(ppt,106)
+
+
+zz <- tt |> 
+  group_by(vaccin.compl) |> 
+  summarise(nb= n())
+zz$inf <- ppl$binf
+zz$sup <- ppl$bsup
+
+zz |> 
+  ggplot() +
+  aes(x = vaccin.compl, y = nb, fill = vaccin.compl) +
+  geom_bar(stat = "identity") +
+  geom_errorbar(aes(ymin = inf, ymax = sup), width=.6,
+                linewidth = 0.6) +
+      theme_light() +
+  labs(
+      title = "Vaccination complète",
+      x = "Vaccination complète",
+      y = "%",
+    ) +
+    scale_fill_discrete_qualitative(palette = "Dynamic") +
+    theme(
+      plot.title = element_text(size = 14, face = "bold"),
+      plot.subtitle = element_text(size = 12),
+      axis.title.y = element_text(
+        size = 12,
+        angle = 0,
+        vjust = .5
+      ),
+      axis.title.x = element_text(
+        size = 12
+      ),
+      axis.text.x = element_text(
+        size = 12, 
+        angle = 60, 
+        hjust = 1
+      ),
+      axis.text.y = element_text(size = 12),
+      legend.position = "none"
+    ) 
+
 ```
 
 
@@ -252,7 +296,7 @@ tt |>
   bold_labels() |>
   add_n() |>
   add_p() |>
-  exptabph(
+  gexptabph(
     lg = FALSE,
     exp = expx,
     nomfich = classeur,
@@ -271,7 +315,7 @@ tt |>
   bold_labels() |>
   add_n() |>
   add_p() |>
-  exptabph(
+  gexptabph(
     lg = FALSE,
     exp = expx,
     nomfich = classeur,
@@ -279,17 +323,43 @@ tt |>
   )
 ```
 
+```{r}
+#| label: figindicx
+#| fig-cap: Vaccination selon la pathologie
+
+
+ttn <- tt |> 
+  select(c(5,25:35)) |> 
+  pivot_longer(cols = 2:12) |> 
+  filter(vaccin.compl == "Oui") |> 
+  mutate(name = as.factor(name)) 
+
+  levels(ttn$name) = c("Crohn","dermato.autre", "Médecine.interne", "PR", "Psoriasis", "RCH", "Rhumato.autre", "Rhum.psoriasique", "SPA","Maladie.Verneuil", "Digestif.autre")
+  ## Réordonnancement de ttn$name
+  ttn$name <- ttn$name %>%
+    fct_relevel(
+      "Psoriasis", "Maladie.Verneuil", "dermato.autre", "Crohn",
+      "RCH", "Digestif.autre", "Rhumato.autre", "Rhum.psoriasique",
+      "PR", "SPA", "Médecine.interne"
+    )
+  
+ttn |> 
+  barouiph(value,name,"Oui", angle = 35, titre = "Vaccination selon la pathologie")
+
+```
+
+
 #### Analyse multivariée
 
 ```{r}
 #| label: critpmulti1
 #| tbl-cap: Vaccination complète -- Analyse en régression
 
-glm(vaccin.compl~sex + age + vih, family = "binomial", data = tt) |> 
+glm(vaccin.compl~age + sex + vih +ttt.is + no.comorbi + trt.crohn, family = "binomial", data = tt) |> 
   tbl_regression(exponentiate = TRUE) |> 
   modify_header(label ~ " ") |>
   bold_labels() |>
-    exptabph(
+    gexptabph(
     lg = FALSE,
     exp = expx,
     nomfich = classeur,
@@ -297,6 +367,9 @@ glm(vaccin.compl~sex + age + vih, family = "binomial", data = tt) |>
   )
 
 ```
+
+
+Deux facteurs prédictifs  de la vaccination dans cette population semble être présents : le sexe masculin & la maladie de Crohn.
 
 ## Critères secondaires
 
@@ -313,14 +386,55 @@ tt |>
     bold_labels() |> 
     add_n() |> 
     add_ci() |> 
-    exptabph(lg = FALSE, exp = expx, nomfich = classeur, nomsheet = "incomp1")
+    pexptabph(lg = FALSE, exp = expx, nomfich = classeur, nomsheet = "incomp1")
 ```
 
 ```{r}
-#| label: figincomp
+#| label: cvaccincfig
 #| fig-cap: Vaccination incomplète
 
-barsimpleph(tt,nb.inj.tot,titre = "Vaccination incomplète", stitre = "Nombre d'injections", capt = "Vaccination incomplète")
+ppt <- table(tt$nb.inj.tot)
+ppl <- transangph(ppt,106)
+
+
+zz <- tt |> 
+  group_by(nb.inj.tot) |> 
+  summarise(nb= n())
+zz$inf <- ppl$binf
+zz$sup <- ppl$bsup
+
+zz |> 
+  ggplot() +
+  aes(x = nb.inj.tot, y = nb, fill = nb.inj.tot) +
+  geom_col() +
+  geom_errorbar(aes(ymin = inf, ymax = sup), width=.6,
+                linewidth = 0.6) +
+      theme_light() +
+  labs(
+      title = "Vaccinations incomplètes",
+      x = "Nombre d'injections",
+      y = "%",
+    ) +
+    scale_fill_discrete_qualitative(palette = "Dynamic") +
+    theme(
+      plot.title = element_text(size = 14, face = "bold"),
+      plot.subtitle = element_text(size = 12),
+      axis.title.y = element_text(
+        size = 12,
+        angle = 0,
+        vjust = .5
+      ),
+      axis.title.x = element_text(
+        size = 12
+      ),
+      axis.text.x = element_text(
+        size = 12, 
+        angle = 0, 
+        hjust = 1
+      ),
+      axis.text.y = element_text(size = 12),
+      legend.position = "none"
+    ) 
 ```
 
 ### Date d'injection
@@ -329,7 +443,7 @@ On étudie si la vaccination était complète (Deux injections) avant la premiè
 
 ```{r}
 #| label: avant
-#| tbl-cap: Vaccination avant l'anti-TNF-$\alpha$
+#| tbl-cap: Vaccination avant l'anti-TNF-alpha
 
 tt <- tt |>
   mutate(avantn = as.numeric(intro.tnf - date.2e.inj)) |>
@@ -342,13 +456,15 @@ tt |>
   bold_labels() |>
   add_n() |>
   add_ci() |>
-  exptabph(
+  pexptabph(
     lg = FALSE,
     exp = expx,
     nomfich = classeur,
     nomsheet = "avant"
   )
 ```
+
+Pratiquement tous les patients ont été vaccinés après la première dose d'anti-TNF-$\alpha$.
 
 ```{r}
 #| label: figavant
@@ -371,7 +487,7 @@ ttn <- ttn |>
   mutate(Rhumatologie = ifelse(rowSums(ttn[1:4]) > 4, "oui","non")) |> 
   mutate(Dermatologie = ifelse(rowSums(ttn[6:8]) > 3, "oui","non")) |> 
   mutate('Gastro.entérologie' = ifelse(rowSums(ttn[9:11]) > 3, "oui","non")) |> 
-  mutate(Autre = ifelse(rowSums(ttn[c(5,12)]) > 2, "oui","non")) |> 
+  mutate('Médecine interne' = ifelse(rowSums(ttn[c(5,12)]) > 2, "oui","non")) |> 
   select(13:16)  |> 
   mutate_all(as.factor)
 ttn$vac <- tt$vaccin.compl
@@ -381,7 +497,7 @@ ttl <- pivot_longer(ttn, 1:4) |>
 ## Réordonnancement de ttl$name
 ttl$name <- ttl$name %>%
   fct_relevel(
-    "Dermatologie", "Gastro.entérologie", "Rhumatologie", "Autre"
+    "Dermatologie", "Gastro.entérologie", "Rhumatologie", "Médecine interne"
   )
 ```
 
@@ -395,11 +511,11 @@ ttl |>
   bold_labels() |>
   add_p() |> 
   modify_spanning_header(paste0("stat_",1:4) ~ "**Spécialité du prescripteur**") |> 
-  exptabph(
+  gexptabph(
     lg = FALSE,
     exp = expx,
     nomfich = classeur,
-    nomsheet = "avant"
+    nomsheet = "specialite"
   )
 ```
 
@@ -414,7 +530,8 @@ ttl |>
   dplyr::filter(name != "Autre") |> 
   ggplot() +
   aes(x = name, fill = vac) +
-  geom_bar(position="fill") +    labs(
+  geom_bar(position="fill") +  
+  labs(
       title = "Vaccination complète & spécialité du prescripteur",
       subtitle = pp,
       x = "Spécialité",
@@ -435,7 +552,9 @@ ttl |>
         size = 12
       ),
       axis.text.x = element_text(
-        size = 12
+        size = 12, 
+        angle = 60, 
+        hjust = 1
       ),
       axis.text.y = element_text(size = 12),
       legend.position = "right"
